@@ -13,8 +13,6 @@ export async function POST(req: Request) {
   try {
     body = await req.json();
   } catch {}
-  console.log("=== UPDATE-CONVEX ENDPOINT CALLED ===");
-  console.log("Received data:", body);
 
   if (!body || typeof body !== "object") {
     return Response.json({ error: "Invalid JSON body" }, { status: 400 });

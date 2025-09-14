@@ -5,6 +5,7 @@ export const list = query({
   args: {},
   handler: async (ctx) => {
     const conversations = await ctx.db.query("conversations").order("desc").collect();
+    console.log("[DEBUG] conversations.list - returning conversations:", conversations);
     return conversations;
   },
 });
@@ -18,45 +19,24 @@ export const upsert = mutation({
       .unique();
     if (existing) return existing._id;
     const id = await ctx.db.insert("conversations", {
-      sessionId,
-      systemInfoCollected: false
+      sessionId
     });
     return id;
   },
 });
 
-export const markSystemInfoCollected = mutation({
-  args: { sessionId: v.string() },
-  handler: async (ctx, { sessionId }) => {
-    const conversation = await ctx.db
-      .query("conversations")
-      .withIndex("by_sessionId", (q) => q.eq("sessionId", sessionId))
-      .unique();
-
-    if (conversation) {
-      await ctx.db.patch(conversation._id, { systemInfoCollected: true });
-      return conversation._id;
-    }
-    return null;
-  },
-});
 
 export const isFirstMessage = mutation({
   args: { sessionId: v.string() },
   handler: async (ctx, { sessionId }) => {
-    // Check if conversation exists and if system info has been collected
+    // Check if conversation exists
     const conversation = await ctx.db
       .query("conversations")
       .withIndex("by_sessionId", (q) => q.eq("sessionId", sessionId))
       .unique();
 
-    if (!conversation) {
-      // No conversation exists, this is definitely the first message
-      return true;
-    }
-
-    // Check if system info has been collected
-    return !conversation.systemInfoCollected;
+    // If no conversation exists, this is the first message
+    return !conversation;
   },
 });
 

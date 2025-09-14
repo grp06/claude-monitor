@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, Fragment } from "react";
 import { useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
@@ -45,6 +45,21 @@ function ConversationCard({
   const prompts = useQuery(api.prompts.listForConversation, { conversationId });
   const aiPrompts = useQuery(api.ai_prompts.listForConversation, { conversationId });
 
+  const handleAdvice = async () => {
+    const latestPrompt = prompts && prompts.length ? prompts[prompts.length - 1].prompt : undefined;
+    const latestAiPrompt = aiPrompts && aiPrompts.length ? aiPrompts[aiPrompts.length - 1].ai_prompt : undefined;
+    const payload: Record<string, string | undefined> = {
+      session_id: sessionId,
+      prompt: latestPrompt,
+      ai_prompt: latestAiPrompt,
+    };
+    await fetch("https://gpickett00.app.n8n.cloud/webhook-test/ffa5d5e2-b46b-446c-a9a3-50389256984d", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+  };
+
   const stats = useMemo(() => {
     if (!prompts && !aiPrompts) return {
       count: 0,
@@ -60,16 +75,16 @@ function ConversationCard({
     return { count, created, updated };
   }, [prompts, aiPrompts]);
 
-  const paired = useMemo(() => {
-    if (!prompts || !aiPrompts) return [] as { ts: number; original?: string; improved?: string }[];
-    const byTsOriginal = new Map<number, string>();
-    const byTsImproved = new Map<number, string>();
-    for (const p of prompts) byTsOriginal.set(p.timestamp, p.prompt);
-    for (const a of aiPrompts) byTsImproved.set(a.timestamp, a.ai_prompt);
-    const allTs = new Set<number>([...byTsOriginal.keys(), ...byTsImproved.keys()]);
-    const sorted = Array.from(allTs).sort((a, b) => a - b);
-    return sorted.map((ts) => ({ ts, original: byTsOriginal.get(ts), improved: byTsImproved.get(ts) }));
+  const pairs = useMemo(() => {
+    if (!prompts || !aiPrompts) return [] as { p: any; a: any }[];
+    const pSorted = [...prompts].sort((a, b) => a.timestamp - b.timestamp);
+    const aSorted = [...aiPrompts].sort((a, b) => a.timestamp - b.timestamp);
+    const n = Math.min(pSorted.length, aSorted.length);
+    const out = [] as { p: any; a: any }[];
+    for (let i = 0; i < n; i++) out.push({ p: pSorted[i], a: aSorted[i] });
+    return out;
   }, [prompts, aiPrompts]);
+
 
   return (
     <details className="group bg-card rounded-2xl border border-border shadow-sm hover:shadow-lg hover:border-primary/20 transition-all duration-300 ease-out overflow-hidden backdrop-blur-sm">
@@ -112,90 +127,53 @@ function ConversationCard({
       </summary>
 
       <div className="px-6 pb-6">
-        <div className="flex gap-8">
-          <div className="flex-1 space-y-3">
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-muted-subtle"></div>
-              <h4 className="text-sm font-semibold text-foreground-subtle uppercase tracking-wider">
-                Original Prompt
-              </h4>
-            </div>
-            <div className="min-h-0 flex-1 overflow-auto rounded-xl border border-border bg-background-subtle/50 p-5 font-mono text-sm leading-relaxed shadow-sm">
-              {paired.length === 0 ? (
-                <div className="text-muted italic flex items-center gap-2">
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                  </svg>
-                  No prompts yet
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {paired.map((item, index) => (
-                    <div key={`o-${item.ts}`} className="space-y-2">
-                      {item.original && (
-                        <div className="text-foreground whitespace-pre-wrap">
-                          {item.original}
-                        </div>
-                      )}
-                      {index < paired.length - 1 && (
-                        <div className="border-b border-border-subtle" />
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+        <div className="grid grid-cols-2 gap-8">
+          <div className="flex items-center gap-2">
+            <div className="w-2 h-2 rounded-full bg-muted-subtle"></div>
+            <h4 className="text-sm font-semibold text-foreground-subtle uppercase tracking-wider">Original Prompt</h4>
           </div>
-
-          <div className="flex-1 space-y-3">
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-gradient-to-r from-primary to-accent"></div>
-              <h4 className="text-sm font-semibold text-foreground-subtle uppercase tracking-wider">
-                AI Rewritten
-              </h4>
-            </div>
-            <div className="min-h-0 flex-1 overflow-auto rounded-xl border border-primary/20 bg-gradient-to-br from-primary-muted/20 to-accent-muted/10 p-5 font-mono text-sm leading-relaxed shadow-sm">
-              {paired.length === 0 ? (
-                <div className="text-muted italic flex items-center gap-2">
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                  </svg>
-                  No rewritten prompts yet
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {paired.map((item, index) => (
-                    <div key={`a-${item.ts}`} className="space-y-2">
-                      {item.improved && (
-                        <div className="text-foreground whitespace-pre-wrap">
-                          {item.improved}
-                        </div>
-                      )}
-                      {index < paired.length - 1 && (
-                        <div className="border-b border-primary/10" />
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+          <div className="flex items-center gap-2">
+            <div className="w-2 h-2 rounded-full bg-gradient-to-r from-primary to-accent"></div>
+            <h4 className="text-sm font-semibold text-foreground-subtle uppercase tracking-wider">AI Rewritten</h4>
           </div>
+          {pairs.length === 0 ? (
+            <>
+              <div className="text-muted italic flex items-center gap-2">
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                </svg>
+                No prompts yet
+              </div>
+              <div className="text-muted italic flex items-center gap-2">
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                </svg>
+                No rewritten prompts yet
+              </div>
+            </>
+          ) : (
+            pairs.map((row) => (
+              <Fragment key={`row-${row.p._id}-${row.a._id}`}>
+                <div className="rounded-xl border border-border bg-background-subtle/50 p-5 font-mono text-sm leading-relaxed shadow-sm">
+                  <div className="text-foreground whitespace-pre-wrap">{row.p.prompt}</div>
+                </div>
+                <div className="rounded-xl border border-primary/20 bg-gradient-to-br from-primary-muted/20 to-accent-muted/10 p-5 font-mono text-sm leading-relaxed shadow-sm">
+                  <div className="text-foreground whitespace-pre-wrap">{row.a.ai_prompt}</div>
+                </div>
+              </Fragment>
+            ))
+          )}
         </div>
-
+        
         <div className="mt-8 pt-6 border-t border-border-subtle">
           <button
-            disabled
-            className="inline-flex items-center gap-3 px-6 py-3 bg-gradient-to-r from-primary to-accent text-white border-0 rounded-xl font-semibold text-sm transition-all duration-200 hover:from-primary-subtle hover:to-accent-subtle shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:from-muted-subtle disabled:to-muted-subtle"
+            onClick={handleAdvice}
+            className="inline-flex items-center gap-3 px-6 py-3 bg-gradient-to-r from-primary to-accent text-white border-0 rounded-xl font-semibold text-sm transition-all duration-200 hover:from-primary-subtle hover:to-accent-subtle shadow-md hover:shadow-lg"
           >
             <LightbulbIcon className="w-5 h-5" />
             <span>Get Prompting Advice</span>
           </button>
-          <p className="text-xs text-muted-subtle mt-3 ml-1 flex items-center gap-1">
-            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            Coming soon
-          </p>
+          
         </div>
       </div>
     </details>
@@ -204,6 +182,7 @@ function ConversationCard({
 
 export default function Home() {
   const conversations = useQuery(api.conversations.list);
+
 
   if (!conversations || conversations.length === 0) {
     return (
@@ -226,14 +205,8 @@ export default function Home() {
               Welcome to Prompt Studio
             </h1>
             <p className="text-muted-subtle text-lg leading-relaxed">
-              Start by sending prompts through the API to see your conversation history and AI improvements appear here.
+              Simply start using Claude Code, and your conversation history and AI improvements will appear here automatically.
             </p>
-          </div>
-          <div className="bg-card/60 backdrop-blur-sm border border-border rounded-2xl p-6 shadow-lg">
-            <p className="text-sm text-foreground-subtle font-medium mb-2">Get started:</p>
-            <code className="text-xs text-muted bg-background-subtle px-3 py-2 rounded-lg block font-mono">
-              {`curl -X POST /api/prompts -d '{"prompt": "Hello world"}'`}
-            </code>
           </div>
         </div>
       </main>

@@ -16,7 +16,6 @@ import type {
 import type * as ai_prompts from "../ai_prompts.js";
 import type * as conversations from "../conversations.js";
 import type * as prompts from "../prompts.js";
-import type * as system_info from "../system_info.js";
 
 /**
  * A utility for referencing Convex functions in your app's API.
@@ -30,7 +29,6 @@ declare const fullApi: ApiFromModules<{
   ai_prompts: typeof ai_prompts;
   conversations: typeof conversations;
   prompts: typeof prompts;
-  system_info: typeof system_info;
 }>;
 export declare const api: FilterApi<
   typeof fullApi,
