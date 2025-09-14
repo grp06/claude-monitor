@@ -40,15 +40,18 @@ export const isFirstMessage = mutation({
 });
 
 export const addPrompt = mutation({
-  args: { sessionId: v.string(), prompt: v.optional(v.string()), ai_prompt: v.optional(v.string()), timestamp: v.number() },
+  args: { sessionId: v.string(), prompt: v.optional(v.string()), ai_prompt: v.optional(v.string()), timestamp: v.optional(v.number()) },
   handler: async (ctx, { sessionId, prompt, ai_prompt, timestamp }) => {
     const existing = await ctx.db
       .query("conversations")
       .withIndex("by_sessionId", (q) => q.eq("sessionId", sessionId))
       .unique();
     const conversationId = existing?._id ?? (await ctx.db.insert("conversations", { sessionId }));
-    if (prompt) await ctx.db.insert("prompts", { conversationId, prompt, timestamp });
-    if (ai_prompt) await ctx.db.insert("ai_prompts", { conversationId, ai_prompt, timestamp });
+
+    // Only insert prompts if they are provided and timestamp is available
+    if (prompt && timestamp) await ctx.db.insert("prompts", { conversationId, prompt, timestamp });
+    if (ai_prompt && timestamp) await ctx.db.insert("ai_prompts", { conversationId, ai_prompt, timestamp });
+
     return conversationId;
   },
 });

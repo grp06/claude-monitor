@@ -38,23 +38,28 @@ function LightbulbIcon({ className }: { className?: string }) {
 function ConversationCard({
   conversationId,
   sessionId,
+  onIgnore,
 }: {
   conversationId: Id<"conversations">;
   sessionId: string;
+  onIgnore: (sessionId: string) => void;
 }) {
   const prompts = useQuery(api.prompts.listForConversation, { conversationId });
   const aiPrompts = useQuery(api.ai_prompts.listForConversation, { conversationId });
+  const usage = useQuery(api.usage.getUsageForConversation, { conversationId });
   const [adviceTips, setAdviceTips] = useState<string[] | null>(null);
   const [adviceLoading, setAdviceLoading] = useState(false);
   const [adviceError, setAdviceError] = useState<string | null>(null);
   const [messageIndex, setMessageIndex] = useState(0);
 
   const loadingMessages = [
-    "Reading user prompts",
+    "Analyzing user prompts",
     "Extracting context from the conversation",
     "Identifying goals and constraints",
     "Applying prompt engineering patterns",
     "Refining instructions and guardrails",
+    "Generating personalized recommendations",
+    "Validating advice quality",
     "Preparing actionable advice"
   ];
 
@@ -159,6 +164,19 @@ function ConversationCard({
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <button
+              title="Ignore session"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onIgnore(sessionId);
+              }}
+              className="opacity-0 group-hover:opacity-100 transition-opacity duration-150 w-7 h-7 rounded-full bg-red-600 hover:bg-red-700 text-white flex items-center justify-center"
+            >
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14" />
+              </svg>
+            </button>
             <svg
               className="w-5 h-5 text-muted-subtle transition-all duration-300 group-open:rotate-180 group-open:text-primary"
               fill="none"
@@ -173,9 +191,47 @@ function ConversationCard({
       </summary>
 
       <div className="px-6 pb-6">
+        {usage && (
+          <div className="mb-6 rounded-2xl border border-border bg-gradient-to-br from-background-subtle/30 to-card/50 p-5 shadow-sm">
+            <div className="flex items-center gap-2 mb-4">
+              <div className="w-2 h-2 rounded-full bg-accent"></div>
+              <h4 className="text-sm font-semibold text-foreground-subtle uppercase tracking-wider">Token Usage</h4>
+            </div>
+            <div className="grid grid-cols-2 gap-4 text-sm">
+              <div className="space-y-2">
+                <div className="flex justify-between items-center p-2 rounded-lg bg-background/50">
+                  <span className="text-muted">Output Tokens:</span>
+                  <span className="font-mono font-semibold text-foreground">{usage.output_tokens.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between items-center p-2 rounded-lg bg-background/50">
+                  <span className="text-muted">Cache Creation Input:</span>
+                  <span className="font-mono font-semibold text-foreground">{usage.cache_creation_input_tokens.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between items-center p-2 rounded-lg bg-background/50">
+                  <span className="text-muted">Cache Read Input:</span>
+                  <span className="font-mono font-semibold text-foreground">{usage.cache_read_input_tokens.toLocaleString()}</span>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <div className="flex justify-between items-center p-2 rounded-lg bg-background/50">
+                  <span className="text-muted">Ephemeral 1h Input:</span>
+                  <span className="font-mono font-semibold text-foreground">{usage.ephemeral_1h_input_tokens.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between items-center p-2 rounded-lg bg-background/50">
+                  <span className="text-muted">Cache Creation 5m:</span>
+                  <span className="font-mono font-semibold text-foreground">{usage.cache_creation_ephemeral_5m_input_tokens.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between items-center p-2 rounded-lg bg-background/50">
+                  <span className="text-muted">Cache Creation 1h:</span>
+                  <span className="font-mono font-semibold text-foreground">{usage.cache_creation_ephemeral_1h_input_tokens.toLocaleString()}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
         {adviceLoading && (
           <div className="fixed inset-0 z-50 bg-black/30 backdrop-blur-sm flex items-center justify-center">
-            <div className="w-full max-w-sm mx-4 rounded-2xl border border-border bg-card p-6 shadow-xl">
+            <div className="w-full max-w-md mx-4 rounded-2xl border border-border bg-card p-6 shadow-xl">
               <div className="flex items-center gap-4">
                 <div className="w-8 h-8 rounded-full border-4 border-primary border-t-transparent animate-spin" />
                 <div className="flex-1">
@@ -258,6 +314,24 @@ function ConversationCard({
 
 export default function Home() {
   const conversations = useQuery(api.conversations.list);
+  const [ignored, setIgnored] = useState<string[]>([]);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("ignoredSessions");
+      if (raw) setIgnored(JSON.parse(raw));
+    } catch {}
+  }, []);
+
+  const handleIgnore = (sid: string) => {
+    setIgnored((prev) => {
+      const next = prev.includes(sid) ? prev : [...prev, sid];
+      try {
+        localStorage.setItem("ignoredSessions", JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+  };
 
   if (conversations === undefined) {
     return (
@@ -319,9 +393,16 @@ export default function Home() {
         </div>
 
         <div className="space-y-8">
-          {conversations.map((c) => (
-            <ConversationCard key={c._id} conversationId={c._id} sessionId={c.sessionId} />
-          ))}
+          {conversations
+            .filter((c) => !ignored.includes(c.sessionId))
+            .map((c) => (
+              <ConversationCard
+                key={c._id}
+                conversationId={c._id}
+                sessionId={c.sessionId}
+                onIgnore={handleIgnore}
+              />
+            ))}
         </div>
       </div>
     </main>
