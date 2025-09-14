@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, Fragment } from "react";
+import { useMemo, useState, Fragment, useEffect } from "react";
 import { useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
@@ -44,6 +44,30 @@ function ConversationCard({
 }) {
   const prompts = useQuery(api.prompts.listForConversation, { conversationId });
   const aiPrompts = useQuery(api.ai_prompts.listForConversation, { conversationId });
+  const [adviceTips, setAdviceTips] = useState<string[] | null>(null);
+  const [adviceLoading, setAdviceLoading] = useState(false);
+  const [adviceError, setAdviceError] = useState<string | null>(null);
+  const [messageIndex, setMessageIndex] = useState(0);
+
+  const loadingMessages = [
+    "Reading user prompts",
+    "Extracting context from the conversation",
+    "Identifying goals and constraints",
+    "Applying prompt engineering patterns",
+    "Refining instructions and guardrails",
+    "Preparing actionable advice"
+  ];
+
+  useEffect(() => {
+    if (!adviceLoading) {
+      setMessageIndex(0);
+      return;
+    }
+    const id = setInterval(() => {
+      setMessageIndex((i) => (i + 1) % loadingMessages.length);
+    }, 1400);
+    return () => clearInterval(id);
+  }, [adviceLoading]);
 
   const promptPairs = useMemo(() => {
     if (!prompts || !aiPrompts) return [];
@@ -62,15 +86,24 @@ function ConversationCard({
   }, [prompts, aiPrompts]);
 
   const handleAdvice = async () => {
-    const payload = {
-      session_id: sessionId,
-      promptPairs,
-    };
-    await fetch("https://gpickett00.app.n8n.cloud/webhook-test/ffa5d5e2-b46b-446c-a9a3-50389256984d", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
+    setAdviceError(null);
+    setAdviceLoading(true);
+    setAdviceTips(null);
+    try {
+      const payload = { session_id: sessionId, promptPairs };
+      const res = await fetch("https://gpickett00.app.n8n.cloud/webhook/ffa5d5e2-b46b-446c-a9a3-50389256984d", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (Array.isArray(data)) setAdviceTips(data as string[]);
+      else setAdviceError("No advice returned");
+    } catch (e) {
+      setAdviceError("Failed to fetch advice");
+    } finally {
+      setAdviceLoading(false);
+    }
   };
 
   const stats = useMemo(() => {
@@ -140,6 +173,39 @@ function ConversationCard({
       </summary>
 
       <div className="px-6 pb-6">
+        {adviceLoading && (
+          <div className="fixed inset-0 z-50 bg-black/30 backdrop-blur-sm flex items-center justify-center">
+            <div className="w-full max-w-sm mx-4 rounded-2xl border border-border bg-card p-6 shadow-xl">
+              <div className="flex items-center gap-4">
+                <div className="w-8 h-8 rounded-full border-4 border-primary border-t-transparent animate-spin" />
+                <div className="flex-1">
+                  <div className="text-sm text-muted-subtle">Getting prompting advice</div>
+                  <div key={messageIndex} className="fade-slide text-foreground font-medium">
+                    {loadingMessages[messageIndex]}...
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+        {adviceTips && adviceTips.length > 0 && (
+          <div className="mb-6 rounded-2xl border border-primary/20 bg-gradient-to-br from-primary-muted/30 to-accent-muted/20 p-5 shadow-sm">
+            <div className="flex items-center gap-2 mb-3">
+              <LightbulbIcon className="w-5 h-5 text-primary" />
+              <h4 className="text-sm font-semibold text-foreground-subtle uppercase tracking-wider">Prompting Advice</h4>
+            </div>
+            <ul className="list-disc pl-5 space-y-2 text-sm text-foreground">
+              {adviceTips.map((tip, i) => (
+                <li key={i} className="leading-relaxed">{tip}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {adviceError && (
+          <div className="mb-6 rounded-xl border border-error bg-error-muted/40 text-error px-4 py-3 text-sm">
+            {adviceError}
+          </div>
+        )}
         <div className="grid grid-cols-2 gap-8">
           <div className="flex items-center gap-2">
             <div className="w-2 h-2 rounded-full bg-muted-subtle"></div>
@@ -179,12 +245,9 @@ function ConversationCard({
         </div>
         
         <div className="mt-8 pt-6 border-t border-border-subtle">
-          <button
-            onClick={handleAdvice}
-            className="inline-flex items-center gap-3 px-6 py-3 bg-gradient-to-r from-primary to-accent text-white border-0 rounded-xl font-semibold text-sm transition-all duration-200 hover:from-primary-subtle hover:to-accent-subtle shadow-md hover:shadow-lg"
-          >
+          <button onClick={handleAdvice} disabled={adviceLoading} className={`inline-flex items-center gap-3 px-6 py-3 text-white border-0 rounded-xl font-semibold text-sm transition-all duration-200 shadow-md hover:shadow-lg ${adviceLoading ? "bg-muted" : "bg-gradient-to-r from-primary to-accent hover:from-primary-subtle hover:to-accent-subtle"}`}>
             <LightbulbIcon className="w-5 h-5" />
-            <span>Get Prompting Advice</span>
+            <span>{adviceLoading ? "Getting Advice..." : "Get Prompting Advice"}</span>
           </button>
           
         </div>
@@ -196,8 +259,18 @@ function ConversationCard({
 export default function Home() {
   const conversations = useQuery(api.conversations.list);
 
+  if (conversations === undefined) {
+    return (
+      <main className="min-h-screen bg-gradient-to-br from-background via-background-subtle to-primary-muted/5 flex items-center justify-center p-8">
+        <div className="flex items-center gap-4">
+          <div className="w-10 h-10 rounded-full border-4 border-primary border-t-transparent animate-spin" />
+          <div className="text-muted-subtle text-lg">Loading your conversations</div>
+        </div>
+      </main>
+    );
+  }
 
-  if (!conversations || conversations.length === 0) {
+  if (conversations.length === 0) {
     return (
       <main className="min-h-screen bg-gradient-to-br from-background via-background-subtle to-primary-muted/5 flex items-center justify-center p-8">
         <div className="text-center space-y-6 max-w-lg">
