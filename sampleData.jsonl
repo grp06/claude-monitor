@@ -1,0 +1,4 @@
+{"type":"user","uuid":"u1","timestamp":"2024-09-01T10:00:00Z","message":{"content":"Open the repo and summarize the structure"}}
+{"type":"assistant","uuid":"a1","parentUuid":"u1","timestamp":"2024-09-01T10:00:01Z","message":{"content":[{"type":"text","text":"Here is the project structure..."}]}}
+{"type":"user","uuid":"u2","timestamp":"2024-09-01T10:05:00Z","message":{"content":"Add a new route to handle uploads"}}
+{"type":"user","uuid":"u3","timestamp":"2024-09-01T10:15:00Z","message":{"content":"Refactor the utils to TypeScript"}}
