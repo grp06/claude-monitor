@@ -3,7 +3,7 @@
 import { useMemo, useState, Fragment, useEffect } from "react";
 import { useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
-import { Id } from "../../convex/_generated/dataModel";
+import { Id, Doc } from "../../convex/_generated/dataModel";
 
 function formatTs(ts?: number) {
   if (!ts) return "";
@@ -72,7 +72,7 @@ function ConversationCard({
       setMessageIndex((i) => (i + 1) % loadingMessages.length);
     }, 1400);
     return () => clearInterval(id);
-  }, [adviceLoading]);
+  }, [adviceLoading, loadingMessages.length]);
 
   const promptPairs = useMemo(() => {
     if (!prompts || !aiPrompts) return [];
@@ -104,7 +104,7 @@ function ConversationCard({
       const data = await res.json();
       if (Array.isArray(data)) setAdviceTips(data as string[]);
       else setAdviceError("No advice returned");
-    } catch (e) {
+    } catch {
       setAdviceError("Failed to fetch advice");
     } finally {
       setAdviceLoading(false);
@@ -127,11 +127,11 @@ function ConversationCard({
   }, [prompts, aiPrompts]);
 
   const pairs = useMemo(() => {
-    if (!prompts || !aiPrompts) return [] as { p: any; a: any }[];
+    if (!prompts || !aiPrompts) return [] as { p: Doc<"prompts">; a: Doc<"ai_prompts"> }[];
     const pSorted = [...prompts].sort((a, b) => a.timestamp - b.timestamp);
     const aSorted = [...aiPrompts].sort((a, b) => a.timestamp - b.timestamp);
     const n = Math.min(pSorted.length, aSorted.length);
-    const out = [] as { p: any; a: any }[];
+    const out = [] as { p: Doc<"prompts">; a: Doc<"ai_prompts"> }[];
     for (let i = 0; i < n; i++) out.push({ p: pSorted[i], a: aSorted[i] });
     return out;
   }, [prompts, aiPrompts]);

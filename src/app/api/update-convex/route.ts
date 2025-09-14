@@ -1,11 +1,24 @@
 import { fetchMutation } from "convex/nextjs";
 import { api } from "../../../../convex/_generated/api";
 
+interface CacheCreation {
+  ephemeral_5m_input_tokens?: number;
+  ephemeral_1h_input_tokens?: number;
+}
+
+interface UsageData {
+  cache_creation_input_tokens?: number;
+  cache_read_input_tokens?: number;
+  output_tokens?: number;
+  ephemeral_1h_input_tokens?: number;
+  cache_creation?: CacheCreation;
+}
+
 interface RequestBody {
   prompt?: string;
   ai_prompt?: string;
   session_id?: string;
-  usage?: unknown;
+  usage?: UsageData;
 }
 
 export async function POST(req: Request) {
@@ -91,19 +104,19 @@ export async function POST(req: Request) {
     }, { status: 500 });
   }
 
-  const rawUsage = requestBody.usage as Record<string, any> | undefined;
+  const rawUsage = requestBody.usage;
   if (rawUsage && typeof rawUsage === "object") {
     try {
       console.log("Processing usage data...");
-      const cache_creation = typeof rawUsage.cache_creation === "object" && rawUsage.cache_creation !== null ? rawUsage.cache_creation : {};
+      const cache_creation = rawUsage.cache_creation || {};
       const payload = {
         conversationId,
         cache_creation_input_tokens: Number(rawUsage.cache_creation_input_tokens) || 0,
         cache_read_input_tokens: Number(rawUsage.cache_read_input_tokens) || 0,
         output_tokens: Number(rawUsage.output_tokens) || 0,
         ephemeral_1h_input_tokens: Number(rawUsage.ephemeral_1h_input_tokens) || 0,
-        cache_creation_ephemeral_5m_input_tokens: Number((cache_creation as any).ephemeral_5m_input_tokens) || 0,
-        cache_creation_ephemeral_1h_input_tokens: Number((cache_creation as any).ephemeral_1h_input_tokens) || 0,
+        cache_creation_ephemeral_5m_input_tokens: Number(cache_creation.ephemeral_5m_input_tokens) || 0,
+        cache_creation_ephemeral_1h_input_tokens: Number(cache_creation.ephemeral_1h_input_tokens) || 0,
       };
 
       console.log("Usage payload:", payload);
