@@ -5,7 +5,6 @@ export const list = query({
   args: {},
   handler: async (ctx) => {
     const conversations = await ctx.db.query("conversations").order("desc").collect();
-    console.log("[DEBUG] conversations.list - returning conversations:", conversations);
     return conversations;
   },
 });

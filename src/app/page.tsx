@@ -45,13 +45,26 @@ function ConversationCard({
   const prompts = useQuery(api.prompts.listForConversation, { conversationId });
   const aiPrompts = useQuery(api.ai_prompts.listForConversation, { conversationId });
 
+  const promptPairs = useMemo(() => {
+    if (!prompts || !aiPrompts) return [];
+    const pSorted = [...prompts].sort((a, b) => a.timestamp - b.timestamp);
+    const aSorted = [...aiPrompts].sort((a, b) => a.timestamp - b.timestamp);
+    const n = Math.min(pSorted.length, aSorted.length);
+    const out = [];
+    for (let i = 0; i < n; i++) {
+      out.push({
+        prompt: pSorted[i].prompt,
+        ai_prompt: aSorted[i].ai_prompt,
+        timestamp: pSorted[i].timestamp
+      });
+    }
+    return out;
+  }, [prompts, aiPrompts]);
+
   const handleAdvice = async () => {
-    const latestPrompt = prompts && prompts.length ? prompts[prompts.length - 1].prompt : undefined;
-    const latestAiPrompt = aiPrompts && aiPrompts.length ? aiPrompts[aiPrompts.length - 1].ai_prompt : undefined;
-    const payload: Record<string, string | undefined> = {
+    const payload = {
       session_id: sessionId,
-      prompt: latestPrompt,
-      ai_prompt: latestAiPrompt,
+      promptPairs,
     };
     await fetch("https://gpickett00.app.n8n.cloud/webhook-test/ffa5d5e2-b46b-446c-a9a3-50389256984d", {
       method: "POST",

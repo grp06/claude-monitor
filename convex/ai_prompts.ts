@@ -9,7 +9,6 @@ export const listForConversation = query({
       .withIndex("by_conversationId_timestamp", (q) => q.eq("conversationId", conversationId))
       .order("asc")
       .collect();
-    console.log(`[DEBUG] ai_prompts.listForConversation - conversationId: ${conversationId}, returning ai prompts:`, prompts);
     return prompts;
   },
 });
